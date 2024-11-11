@@ -1,0 +1,3 @@
+/home/ato-markin/Documents/ff_programs/cmake-build-debug/CMakeFiles/ff_programs.dir
+/home/ato-markin/Documents/ff_programs/cmake-build-debug/CMakeFiles/edit_cache.dir
+/home/ato-markin/Documents/ff_programs/cmake-build-debug/CMakeFiles/rebuild_cache.dir
