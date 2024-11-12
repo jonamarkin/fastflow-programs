@@ -8,69 +8,87 @@
 
 using namespace ff;
 
-// Define a simple task structure that holds an integer.
-struct myTask_t {
-    int value;
 
-    // Serialization to pass the task through the pipeline.
+struct myTask_t {
+    std::string str;
+    struct S_t {
+        long t;
+        float f;
+    }S;
+
     template<class Archive>
     void serialize(Archive & archive) {
-        archive(value);
+        archive(str, S.t, S.f);
     }
 };
 
-// Define the first node that will perform a simple computation (adding 1 to the value).
-struct Node1 : ff_monode_t<myTask_t> {
-    myTask_t* svc(myTask_t* task) {
-        task->value += 1;  // Add 1 to the task value.
-        std::cout << "Node1: value = " << task->value << std::endl;
-        return task;
+
+struct Node1: ff_monode_t<myTask_t> {
+    Node1(long ntasks):ntasks(ntasks){}
+    myTask_t* svc(myTask_t*) {
+        for (long i=0; i<ntasks; i++) {
+            myTask_t* task = new myTask_t;
+            task->str="Hello";
+            task->S.t=i;
+            task->S.f=i*1.0;
+            ff_send_out(task);
+        }
+        return EOS;
     }
+
+    const long ntasks;
+
 };
 
-// Define the second node that will perform another computation (adding 2 to the value).
-struct Node2 : ff_minode_t<myTask_t> {
-    myTask_t* svc(myTask_t* task) {
-        task->value += 2;  // Add 2 to the task value.
-        std::cout << "Node2: value = " << task->value << std::endl;
-        delete task;  // After processing, delete the task.
-        return GO_ON;  // Continue to process any remaining tasks.
+struct Node2: ff_monode_t<myTask_t> {
+    Node2(long ntasks):ntasks(ntasks){}
+
+    myTask_t* svc(myTask_t* t) {
+        t->str += std::string(" World");
+
+        ++processed;
+        delete t;
+        return GO_ON;
     }
+
+    void svc_end() {
+        if (processed != ntasks) {
+            abort();
+        }
+
+        ff::cout << "RESULT OK\n";
+    }
+
+    long ntasks;
+    long processed = 0;
 };
 
 int main(int argc, char*argv[]) {
-    // Initialize FastFlow (DFF) system
-    if (DFF_Init(argc, argv) < 0) {
-        std::cerr << "DFF_Init failed!" << std::endl;
+
+    if(DFF_Init(argc, argv)<0) {
+        error("DFF_Init\n");
         return -1;
     }
 
-    // Create a pipeline with one group (G1)
+    long ntasks = 1000;
+    if(argc>1) {
+        ntasks = std::stol(argv[1]);
+    }
+
     ff_pipeline pipe;
+    Node1 node1(ntasks);
+    Node2 node2(ntasks);
 
-    // Create instances of Node1 and Node2
-    Node1 n1;
-    Node2 n2;
+    pipe.add_stage(&node1);
+    pipe.add_stage(&node2);
 
-    // Add the nodes to the pipeline
-    pipe.add_stage(&n1);  // First stage: Node1
-    pipe.add_stage(&n2);  // Second stage: Node2
-
-    // Create a group for the pipeline (this allows running the nodes in parallel if needed)
     auto G1 = pipe.createGroup("G1");
 
-    // Create a task with an initial value
-    myTask_t* task = new myTask_t;
-    task->value = 0;  // Initial value is 0.
-
-    // Send the task to the pipeline
-    ff_send_out(task);
-
-    // Run the pipeline and wait for it to finish processing
-    if (pipe.run_and_wait_end() < 0) {
-        std::cerr << "Error running the pipeline!" << std::endl;
+    if(pipe.run_and_wait_end()<0) {
+        error("running the main pipe\n");
         return -1;
     }
 
     return 0;
 }
+
